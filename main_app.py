@@ -100,7 +100,7 @@ keywords = st.multiselect('検索したいキーワードを選択してくだ�
 additional_keywords = st.text_area('他に検索したいキーワードがあれば、各キーワードを新しい行に入力してください', '')
 if additional_keywords:
     keywords.extend(additional_keywords.splitlines())
-domain = st.text_input('検索したいURLのドメインを入力してください', placeholder='XXX.jp')
+domain = st.text_input('検索したいURLのドメインを入力してください', '')
 
 # 検索結果と検索終了フラグを保存するためのSession Stateを初期化
 if 'results' not in st.session_state:
