@@ -177,9 +177,9 @@ if st.session_state['search_finished']:  # 検索が終了したときだけ結�
         if results:  # 結果が存在する場合のみ表示
             # URLの場合は表示を変更
             if keyword.startswith('http'):
-                st.markdown(f"<h2 style='font-weight: bold; font-size: 18px;'>URL '{keyword}' の検索結果：</h2>", unsafe_allow_html=True)
+                st.markdown(f"<h2 style='font-weight: bold; font-size: 20px;'>URL '{keyword}' の検索結果：</h2>", unsafe_allow_html=True)
             else:
-                st.markdown(f"<h2 style='font-weight: bold; font-size: 18px;'>キーワード '{keyword}' の検索結果：</h2>", unsafe_allow_html=True)
+                st.markdown(f"<h2 style='font-weight: bold; font-size: 20px;'>キーワード '{keyword}' の検索結果：</h2>", unsafe_allow_html=True)
             for result in results:
                 st.markdown(result, unsafe_allow_html=True)
 elif not st.session_state['results'] and st.session_state['search_started']:  # 検索が開始されたときだけエラーメッセージを表示
