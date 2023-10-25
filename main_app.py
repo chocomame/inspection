@@ -8,6 +8,7 @@ from urllib.parse import urlparse, urldefrag, unquote
 import re
 import chardet
 from PIL import Image
+from urllib.parse import urljoin
 
 visited_pages = set()
 
@@ -108,11 +109,20 @@ def search_keywords(url, keywords, original_domain):
     for link in links:
         link_url = link.get('href')
         if link_url:
-            if "#" in link_url:
-                continue
-            if link_url.startswith('http') and re.search(original_domain, link_url):
-                st.session_state['results'].update(search_keywords(link_url, search_keywords_list, original_domain))
-    return results
+            # URLが相対パスの場合、絶対URLに変換する
+            if not link_url.startswith('http'):
+                link_url = urljoin(url, link_url)
+            # ドメインが一致する場合のみ再帰的に関数を呼び出す
+            if urlparse(link_url).netloc == original_domain:
+                new_results = search_keywords(link_url, keywords, original_domain)
+                if new_results:  # 空の辞書をチェック
+                    for keyword, new_result in new_results.items():
+                        if keyword in results:
+                            results[keyword].extend(new_result)
+                        else:
+                            results[keyword] = new_result
+
+    return results  # 辞書を返す
 
 def start_search(url, keywords, domain):
     results = search_keywords(url, keywords, domain)
