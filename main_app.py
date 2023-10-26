@@ -13,6 +13,10 @@ from urllib.parse import urljoin
 visited_pages = set()
 
 def search_keywords(url, keywords, original_domain):
+    # URLがhttpまたはhttpsで始まることを確認する
+    if not url.startswith('http://') and not url.startswith('https://'):
+        st.error(f"無効なURLです。正しく入力してください。: {url}")
+        return []
     # ドメインを比較する
     current_domain = urlparse(url).netloc
     if current_domain != original_domain:
