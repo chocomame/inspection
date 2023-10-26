@@ -16,19 +16,27 @@ def search_keywords(url, keywords, original_domain):
     # URLがhttpまたはhttpsで始まることを確認する
     if not url.startswith('http://') and not url.startswith('https://'):
         st.error(f"無効なURLです。正しく入力してください。: {url}")
-        return []
+        return {}  # 空の辞書を返す
+
+    # URLを正規化する（スラッシュで終わるようにする）
+    if not url.endswith('/'):
+        url += '/'
+
+
+    # ...(以下略)...
     # ドメインを比較する
     current_domain = urlparse(url).netloc
     if current_domain != original_domain:
         st.write(f"ドメインが一致しません: {current_domain} != {original_domain}")
         return []
 
-    # 既に訪問されたページかどうかを確認する
     # URLをデコードし、visited_pagesセットに追加する
     decoded_url = unquote(url)
     decoded_url = urldefrag(decoded_url).url
+
+    # 既に訪問されたページかどうかを確認する
     if decoded_url in visited_pages:
-        return []
+        return {}  # 空の辞書を返す
     visited_pages.add(decoded_url)
 
     # 指定されたURLに対してリクエストを行う
@@ -171,9 +179,10 @@ for keyword in keywords:
 if st.button('検索開始'):
     with st.spinner('検索中...キーワードごとにカテゴライズしてるから、ちょっと待っててね！ฅ^•ω•^ฅ'):
         results = search_keywords(url, keywords, domain)
-    st.session_state['results'] = results
-    st.session_state['search_finished'] = True  # 検索が終了したことを示すフラグを更新
-    st.session_state['search_started'] = True  # 検索が開始したことを示すフラグを更新
+        if results:  # 結果が空の辞書でない場合のみ結果を保存
+            st.session_state['results'] = results
+            st.session_state['search_finished'] = True  # 検索が終了したことを示すフラグを更新
+            st.session_state['search_started'] = True  # 検索が開始したことを示すフラグを更新
 
 # 検索結果の表示
 if st.session_state['search_finished']:  # 検索が終了したときだけ結果を表示
