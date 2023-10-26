@@ -12,6 +12,7 @@ from urllib.parse import urljoin
 
 visited_pages = set()
 
+
 def search_keywords(url, keywords, original_domain):
     # URLがhttpまたはhttpsで始まることを確認する
     if not url.startswith('http://') and not url.startswith('https://'):
