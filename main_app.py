@@ -47,7 +47,8 @@ def search_keywords(url, keywords, original_domain):
         encoding = 'utf-8'
 
     #  HTMLコンテンツのパース
-    soup = BeautifulSoup(page.content.decode(encoding), 'html.parser')
+    #soup = BeautifulSoup(page.content.decode(encoding), 'html.parser')
+    soup = BeautifulSoup(page.text, 'html.parser')
 
     # 特定のHTMLタグ内の全テキストを検索
     # texts = soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
