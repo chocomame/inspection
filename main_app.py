@@ -153,14 +153,51 @@ st.image(image,use_column_width=True)
 
 # ユーザーが入力する欄
 url = st.text_input('検索するURLを入力してください', '')
+
+domain = st.text_input('検索したいURLのドメインを入力してください', '')
+
 # 全角英数字を一つの文字列として生成
 full_width_alphanumeric = ''.join([chr(i) for i in range(65296, 65296 + 26 + 26 + 10)])
 
-keywords = st.multiselect('検索したいキーワードを選択してください', ['患者様' , '患者さま', '患者さん', 'カ月' , 'ヶ月', 'ヵ月', 'か月', 'お母様' , 'お母さま', 'お母さん', '皆様' , '皆さま', 'みなさま', 'みなさん', '皆さん', 'お子様' , 'お子さま', 'お子さん', 'お子さま', '子どもさん', 'こどもさん', '子供' , '子ども', 'こども', '当院' , '当クリニック', '致し' , 'いたし', '事' , 'こと', '頂' , 'いただ', '下さ' , 'くださ', '行な' , '行', '参りま' , 'まいりま', 'むし歯' , '虫歯', '根管' , '根幹', '骨粗鬆症' , '骨粗しょう症', '癌' , 'がん', 'ガン', 'ドック' , 'ドッグ', '●●●', 'xxx', ' ', '　', full_width_alphanumeric])
+keywords = []
+keyword_options = ['患者様' , '患者さま', '患者さん', 'カ月' , 'ヶ月', 'ヵ月', 'か月', 'お母様' , 'お母さま', 'お母さん', '皆様' , '皆さま', 'みなさま', 'みなさん', '皆さん', 'お子様' , 'お子さま', 'お子さん', 'お子さま', '子どもさん', 'こどもさん', '子供' , '子ども', 'こども', '当院' , '当クリニック', '致し' , 'いたし', '事' , 'こと', '頂' , 'いただ', '下さ' , 'くださ', '行な' , '行', '参りま' , 'まいりま', 'むし歯' , '虫歯', '根管' , '根幹', '骨粗鬆症' , '骨粗しょう症', '癌' , 'がん', 'ガン', 'ドック' , 'ドッグ', '●●●', 'xxx', ' ', '　', full_width_alphanumeric]
+
+
+# チェックボックスの状態を管理するためのSession Stateを初期化
+if 'checkbox_states' not in st.session_state:
+    st.session_state['checkbox_states'] = [False] * len(keyword_options)
+
+# 2列のレイアウトを作成
+col1, col2, col3 = st.columns(3)
+
+# 各キーワードに対してチェックボックスを作成
+for i, option in enumerate(keyword_options):
+    # チェックボックスを配置するカラムを決定
+    if i % 3 == 0:
+        col = col1
+    elif i % 3 == 1:
+        col = col2
+    else:
+        col = col3
+    # チェックボックスを作成し、状態をSession Stateから取得
+    checkbox_state = col.checkbox(option, key=f"{option}-{i}", value=st.session_state['checkbox_states'][i])
+    # チェックボックスの状態をSession Stateに保存
+    st.session_state['checkbox_states'][i] = checkbox_state
+    if checkbox_state:
+        keywords.append(option)
+
+# 全てのチェックボックスを解除するボタンを作成
+if st.button('全て解除'):
+    # 全てのチェックボックスの状態をFalseに設定
+    st.session_state['checkbox_states'] = [False] * len(keyword_options)
+    # keywordsリストを空にする
+    keywords.clear()
+st.markdown('<span style="color:red; font-size:14px">※全てのチェックを解除するには、「全て解除」ボタンを2回押してね！</span>', unsafe_allow_html=True)
+
+
 additional_keywords = st.text_area('他に検索したいキーワードがあれば、各キーワードを新しい行に入力してください', '')
 if additional_keywords:
     keywords.extend(additional_keywords.splitlines())
-domain = st.text_input('検索したいURLのドメインを入力してください', '')
 
 # 検索結果と検索終了フラグを保存するためのSession Stateを初期化
 if 'results' not in st.session_state:
@@ -206,4 +243,6 @@ elif not st.session_state['results'] and st.session_state['search_started']:  # 
 if st.session_state['search_finished']:
     st.success('検索が終了しました。')
     st.session_state['search_finished'] = False  # フラグをリセット
-        
+
+# 2列のレイアウトを作成
+col1, col2 = st.columns(2)
