@@ -95,10 +95,18 @@ def search_keywords(url, keywords, original_domain, depth=0):
                         if char in line:
                             line_number = i + 1
                             highlighted_line = line.replace(char, f"<span style='color:red;'>{char}</span>")
-                            result = f"'{char}' : ({line_number}行目)\r\n{highlighted_line}\r\n"
+                            decoded_url = unquote(url)  # URLをデコード
+                            result = f"'{char}' : {decoded_url} ({line_number}行目)\r\n{highlighted_line}\r\n"
                             if url not in full_width_results:
                                 full_width_results[url] = []
                             full_width_results[url].append(result)
+                elif keyword in line:
+                    line_number = i + 1
+                    display_keyword = '_' if keyword == ' ' else '＿' if keyword == '\u3000' else keyword
+                    highlighted_line = line.replace(keyword, f"<span style='color:red;'>{display_keyword}</span>")
+                    decoded_url = unquote(url)  # URLをデコード
+                    result = f"'<span style='color:red;'>{keyword}</span>' : {decoded_url} ({line_number}行目)\r\n{highlighted_line}\r\n"
+                    results[keyword].append(result)
                 elif keyword in line:
                     line_number = i + 1
                     display_keyword = '_' if keyword == ' ' else '＿' if keyword == '\u3000' else keyword
@@ -245,7 +253,8 @@ if 'results' in st.session_state and st.session_state['results']:
             if keyword == full_width_alphanumeric:
                 st.markdown(f"<h2 style='font-weight: bold; font-size: 20px;'>全角英数字の検索結果：</h2>", unsafe_allow_html=True)
                 for url, url_results in results.items():
-                    st.markdown(f"<h3 style='font-weight: bold; font-size: 18px;'>URL: {url}</h3>", unsafe_allow_html=True)
+                    decoded_url = unquote(url)  # URLをデコード
+                    st.markdown(f"<h3 style='font-weight: bold; font-size: 18px;'>URL: {decoded_url}</h3>", unsafe_allow_html=True)
                     for result in url_results:
                         st.markdown(result, unsafe_allow_html=True)
             else:
