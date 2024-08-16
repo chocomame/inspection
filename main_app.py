@@ -185,6 +185,10 @@ keyword_options = ['患者様' , '患者さま', '患者さん', 'カ月' , 'ヶ
 if 'checkbox_states' not in st.session_state:
     st.session_state['checkbox_states'] = [False] * len(keyword_options)
 
+# チェックされたキーワードの順序を保持するリスト
+if 'checked_keywords_order' not in st.session_state:
+    st.session_state['checked_keywords_order'] = []
+
 # 3列のレイアウトを作成
 col1, col2, col3 = st.columns(3)
 
@@ -203,6 +207,11 @@ for i, option in enumerate(keyword_options):
     st.session_state['checkbox_states'][i] = checkbox_state
     if checkbox_state:
         keywords.append(option)
+        if option not in st.session_state['checked_keywords_order']:
+            st.session_state['checked_keywords_order'].append(option)
+    else:
+        if option in st.session_state['checked_keywords_order']:
+            st.session_state['checked_keywords_order'].remove(option)
 
 # 全てのチェックボックスを解除するボタンを作成
 if st.button('全て解除'):
@@ -210,6 +219,8 @@ if st.button('全て解除'):
     st.session_state['checkbox_states'] = [False] * len(keyword_options)
     # keywordsリストを空にする
     keywords.clear()
+    # チェックされたキーワードの順序リストを空にする
+    st.session_state['checked_keywords_order'] = []
 st.markdown('<span style="color:red; font-size:14px">※全てのチェックを解除するには、「全て解除」ボタンを2回押してね！</span>', unsafe_allow_html=True)
 
 additional_keywords = st.text_area('他に検索したいキーワードがあれば、各キーワードを新しい行に入力してください', '')
@@ -248,8 +259,10 @@ if st.button('検索開始'):
 
 # 検索結果の表示
 if 'results' in st.session_state and st.session_state['results']:
-    for keyword, results in st.session_state['results'].items():
-        if results:  # 結果が存在する場合のみ表示
+    # チェックされたキーワードの順序に基づいて結果を表示
+    for keyword in st.session_state['checked_keywords_order']:
+        if keyword in st.session_state['results'] and st.session_state['results'][keyword]:
+            results = st.session_state['results'][keyword]
             if keyword == full_width_alphanumeric:
                 st.markdown(f"<h2 style='font-weight: bold; font-size: 20px;'>全角英数字の検索結果：</h2>", unsafe_allow_html=True)
                 for url, url_results in results.items():
