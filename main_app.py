@@ -4,139 +4,150 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse, urldefrag, unquote
 import re
 import chardet
 from PIL import Image
-from urllib.parse import urljoin
+import time
+import re
+from urllib.parse import urlparse, urldefrag, unquote, urljoin, quote
+
 
 visited_pages = set()
+max_depth = 4  # 最大探索深度を設定
 
-
-def search_keywords(url, keywords, original_domain):
-    # URLがhttpまたはhttpsで始まることを確認する
-    if not url.startswith('http://') and not url.startswith('https://'):
-        st.error(f"無効なURLです。正しく入力してください。: {url}")
-        return {}  # 空の辞書を返す
-
-    # URLを正規化する（スラッシュで終わるようにする）
-    if not url.endswith('/'):
-        url += '/'
-
-
-    # ...(以下略)...
-    # ドメインを比較する
-    current_domain = urlparse(url).netloc
-    if current_domain != original_domain:
-        st.write(f"ドメインが一致しません: {current_domain} != {original_domain}")
-        return []
-
-    # URLをデコードし、visited_pagesセットに追加する
+def normalize_url(url):
+    # URLをデコードしてから再エンコード
     decoded_url = unquote(url)
-    decoded_url = urldefrag(decoded_url).url
+    url = quote(decoded_url, safe=':/?=&')
+    # フラグメント識別子（アンカーリンク）を削除
+    url = url.split('#')[0]
+    # クエリパラメータを削除
+    url = url.split('?')[0]
+    # 末尾のスラッシュを削除（ただし、/wp/は保持）
+    if not url.endswith('/wp/'):
+        url = re.sub(r'/+$', '', url)
+    # 末尾の引用符を削除
+    url = url.rstrip('"')
+    return url
 
-    # 既に訪問されたページかどうかを確認する
-    if decoded_url in visited_pages:
-        return {}  # 空の辞書を返す
-    visited_pages.add(decoded_url)
+def is_valid_url(url):
+    try:
+        result = urlparse(url)
+        return all([result.scheme, result.netloc])
+    except:
+        return False
 
-    # 指定されたURLに対してリクエストを行う
-    page = requests.get(url)
-    encoding = chardet.detect(page.content)['encoding']
-    if encoding is None:
-        encoding = 'utf-8'
+# 進捗状況を表示する関数
+def update_progress(message):
+    if 'progress_placeholder' not in st.session_state:
+        st.session_state.progress_placeholder = st.empty()
+    st.session_state.progress_placeholder.text(message)
 
-    #  HTMLコンテンツのパース
-    #soup = BeautifulSoup(page.content.decode(encoding), 'html.parser')
-    soup = BeautifulSoup(page.text, 'html.parser')
+def search_keywords(url, keywords, original_domain, depth=0):
+    if depth > max_depth:
+        return {}
 
-    # 特定のHTMLタグ内の全テキストを検索
-    # texts = soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-    texts = soup.find_all(text=True)
+    url = normalize_url(url)
+    update_progress(f"処理中のURL: {url} (深さ: {depth})")
 
-    # すべてのタグのテキストを連結する
-    text = '\n'.join([t.get_text() for t in texts])
-    
-    # 半角と全角のスペースを含むキーワードを特定する
-    search_keywords_list = keywords.copy()
-    #for keyword in keywords:
-    #    if keyword in [' ', '\u3000']:
-    #        text = text.replace(' ', '_').replace('\u3000', '_')
-    #        search_keywords_list = ['_']
-    #        break
+    try:
+        # URLの検証
+        if not is_valid_url(url):
+            return {}
 
-    # デバッグ情報の表示
-    #st.write(f"検索キーワードリスト: {search_keywords_list}")
+        # ドメインを比較する
+        current_domain = urlparse(url).netloc
+        if current_domain != original_domain:
+            return {}
 
-    # テキストを行に分割する
-    lines = text.splitlines()
+        # 既に訪問されたページかどうかを確認する
+        if url in visited_pages:
+            return {}
+        visited_pages.add(url)
 
-    # キーワード検索する
-    if full_width_alphanumeric in search_keywords_list:
-        # 全角半角英数字が選択された時だけ、結果をURLごとにカテゴライズ
-        results = {decoded_url: []}
-    else:
-        # それ以外の場合は、結果をキーワードごとにカテゴライズ
-        results = {keyword: [] for keyword in search_keywords_list}
+        # 指定されたURLに対してリクエストを行う
+        page = requests.get(url, timeout=10)
+        page.raise_for_status()  # HTTPエラーをチェック
+
+        # HTMLコンテンツのパース
+        soup = BeautifulSoup(page.content, 'html.parser')
         
-    # 全角英数字の各文字をキーとして追加
-    if full_width_alphanumeric in search_keywords_list:
-        for char in full_width_alphanumeric:
-            results[char] = []
+        # 特定のHTMLタグ内の全テキストを検索
+        texts = soup.find_all(string=True)
 
-    for i, line in enumerate(lines):
-        for keyword in search_keywords_list:
-            # 全角英数字を一文字ずつ検索する
-            if keyword in full_width_alphanumeric:
-                for char in keyword:
-                    if char in line:
-                        # 行番号を表示する
-                        line_number = i + 1
-                        # キーワードを含む行を赤色で表示する
-                        line = line.replace(char, f"<span style='color:red;'>{char}</span>")
-                        # 結果のフォーマットを変更
-                        result = f"'<span style='color:red;'>{char}</span>' : {decoded_url} ({line_number}行目)\r\n{line}\r\n"
-                        results[decoded_url].append(result)
-            else:
-                if keyword in line:
-                    # 行番号を表示する
+        # すべてのタグのテキストを連結する
+        text = '\n'.join([t.get_text() for t in texts])
+        
+        # 半角と全角のスペースを含むキーワードを特定する
+        search_keywords_list = keywords.copy()
+
+        # テキストを行に分割する
+        lines = text.splitlines()
+
+        # キーワード検索する
+        results = {keyword: [] for keyword in keywords}
+        full_width_results = {}  # 全角英数字の結果を格納する辞書
+
+        for i, line in enumerate(lines):
+            for keyword in keywords:
+                if keyword == full_width_alphanumeric:
+                    for char in full_width_alphanumeric:
+                        if char in line:
+                            line_number = i + 1
+                            highlighted_line = line.replace(char, f"<span style='color:red;'>{char}</span>")
+                            result = f"'{char}' : ({line_number}行目)\r\n{highlighted_line}\r\n"
+                            if url not in full_width_results:
+                                full_width_results[url] = []
+                            full_width_results[url].append(result)
+                elif keyword in line:
                     line_number = i + 1
-                    # キーワードを含む行を赤色で表示する
-                    if keyword == ' ':
-                        display_keyword = '_'
-                    elif keyword == '\u3000':
-                        display_keyword = '＿'
-                    else:
-                        display_keyword = keyword
-                    line = line.replace(keyword, f"<span style='color:red;'>{display_keyword}</span>")
-                    # 結果のフォーマットを変更
-                    result = f"'<span style='color:red;'>{keyword}</span>' : {decoded_url} ({line_number}行目)\r\n{line}\r\n"
-                    if keyword in results:
-                        results[keyword].append(result)
-                    else:
-                        results[keyword] = [result]
-                
-    # ページ内の全リンクを検索する
-    links = soup.find_all('a')
+                    display_keyword = '_' if keyword == ' ' else '＿' if keyword == '\u3000' else keyword
+                    highlighted_line = line.replace(keyword, f"<span style='color:red;'>{display_keyword}</span>")
+                    result = f"'<span style='color:red;'>{keyword}</span>' : {url} ({line_number}行目)\r\n{highlighted_line}\r\n"
+                    results[keyword].append(result)
 
-    # リンクを繰り返し、各リンクに対して再帰的に関数を呼び出す
-    for link in links:
-        link_url = link.get('href')
-        if link_url:
-            # URLが相対パスの場合、絶対URLに変換する
-            if not link_url.startswith('http'):
-                link_url = urljoin(url, link_url)
-            # ドメインが一致する場合のみ再帰的に関数を呼び出す
-            if urlparse(link_url).netloc == original_domain:
-                new_results = search_keywords(link_url, keywords, original_domain)
-                if new_results:  # 空の辞書をチェック
-                    for keyword, new_result in new_results.items():
-                        if keyword in results:
-                            results[keyword].extend(new_result)
-                        else:
-                            results[keyword] = new_result
+        # 全角英数字の結果を results に追加
+        if full_width_results:
+            results[full_width_alphanumeric] = full_width_results
 
-    return results  # 辞書を返す
+        # 空の結果を削除
+        results = {k: v for k, v in results.items() if v}
+
+        # ページ内の全リンクを検索する
+        links = soup.find_all('a')
+
+        # リンクを繰り返し、各リンクに対して再帰的に関数を呼び出す
+        for link in links:
+            link_url = link.get('href')
+            if link_url:
+                # URLが相対パスの場合、絶対URLに変換する
+                if not link_url.startswith('http'):
+                    link_url = urljoin(url, link_url)
+                link_url = normalize_url(link_url)
+                # 電話番号のリンクを除外
+                if link_url.startswith('tel:'):
+                    continue
+                # ドメインが一致し、有効なURLの場合のみ再帰的に関数を呼び出す
+                if urlparse(link_url).netloc == original_domain and is_valid_url(link_url):
+                    new_results = search_keywords(link_url, keywords, original_domain, depth + 1)
+                    if new_results:  # 空の辞書をチェック
+                        for keyword, new_result in new_results.items():
+                            if keyword in results:
+                                if keyword == full_width_alphanumeric:
+                                    results[keyword].update(new_result)
+                                else:
+                                    results[keyword].extend(new_result)
+                            else:
+                                results[keyword] = new_result
+
+        return results  # 辞書を返す
+
+    except requests.RequestException:
+        pass
+    except Exception:
+        pass
+
+    return results
 
 def start_search(url, keywords, domain):
     results = search_keywords(url, keywords, domain)
@@ -162,12 +173,11 @@ full_width_alphanumeric = ''.join([chr(i) for i in range(65296, 65296 + 26 + 26 
 keywords = []
 keyword_options = ['患者様' , '患者さま', '患者さん', 'カ月' , 'ヶ月', 'ヵ月', 'か月', 'お母様' , 'お母さま', 'お母さん', '皆様' , '皆さま', 'みなさま', 'みなさん', '皆さん', 'お子様' , 'お子さま', 'お子さん', 'お子さま', '子どもさん', 'こどもさん', '子供' , '子ども', 'こども', '当院' , '当クリニック', '致し' , 'いたし', '事' , 'こと', '頂' , 'いただ', '下さ' , 'くださ', '行な' , '行', '参りま' , 'まいりま', 'むし歯' , '虫歯', '根管' , '根幹', '骨粗鬆症' , '骨粗しょう症', '癌' , 'がん', 'ガン', 'ドック' , 'ドッグ', '●●●', 'xxx', ' ', '　', full_width_alphanumeric]
 
-
 # チェックボックスの状態を管理するためのSession Stateを初期化
 if 'checkbox_states' not in st.session_state:
     st.session_state['checkbox_states'] = [False] * len(keyword_options)
 
-# 2列のレイアウトを作成
+# 3列のレイアウトを作成
 col1, col2, col3 = st.columns(3)
 
 # 各キーワードに対してチェックボックスを作成
@@ -194,7 +204,6 @@ if st.button('全て解除'):
     keywords.clear()
 st.markdown('<span style="color:red; font-size:14px">※全てのチェックを解除するには、「全て解除」ボタンを2回押してね！</span>', unsafe_allow_html=True)
 
-
 additional_keywords = st.text_area('他に検索したいキーワードがあれば、各キーワードを新しい行に入力してください', '')
 if additional_keywords:
     keywords.extend(additional_keywords.splitlines())
@@ -217,26 +226,34 @@ for keyword in keywords:
         
 if st.button('検索開始'):
     with st.spinner('検索中...キーワードごとにカテゴライズしてるから、ちょっと待っててね！ฅ^•ω•^ฅ'):
+        start_time = time.time()
         results = search_keywords(url, keywords, domain)
-        if results:  # 結果が空の辞書でない場合のみ結果を保存
+        end_time = time.time()
+        if results:  # 結果が空でない場合のみ結果を保存
             st.session_state['results'] = results
-            st.session_state['search_finished'] = True  # 検索が終了したことを示すフラグを更新
-            st.session_state['search_started'] = True  # 検索が開始したことを示すフラグを更新
+            st.session_state['search_finished'] = True
+            st.session_state['search_started'] = True
+            st.success(f'検索が終了しました。処理時間: {end_time - start_time:.2f}秒')
+        else:
+            st.session_state['search_started'] = True
+            st.error('該当するキーワードが見つかりませんでした。')
 
 # 検索結果の表示
-if st.session_state['search_finished']:  # 検索が終了したときだけ結果を表示
+if 'results' in st.session_state and st.session_state['results']:
     for keyword, results in st.session_state['results'].items():
         if results:  # 結果が存在する場合のみ表示
-            # URLの場合は表示を変更
-            if keyword.startswith('http'):
-                st.markdown(f"<h2 style='font-weight: bold; font-size: 20px;'>URL '{keyword}' の検索結果：</h2>", unsafe_allow_html=True)
+            if keyword == full_width_alphanumeric:
+                st.markdown(f"<h2 style='font-weight: bold; font-size: 20px;'>全角英数字の検索結果：</h2>", unsafe_allow_html=True)
+                for url, url_results in results.items():
+                    st.markdown(f"<h3 style='font-weight: bold; font-size: 18px;'>URL: {url}</h3>", unsafe_allow_html=True)
+                    for result in url_results:
+                        st.markdown(result, unsafe_allow_html=True)
             else:
-                # 結果の数を取得
                 num_results = len(results)
                 st.markdown(f"<h2 style='font-weight: bold; font-size: 20px;'>キーワード '{keyword}' の検索結果 ({num_results}件)：</h2>", unsafe_allow_html=True)
-            for result in results:
-                st.markdown(result, unsafe_allow_html=True)
-elif not st.session_state['results'] and st.session_state['search_started']:  # 検索が開始されたときだけエラーメッセージを表示
+                for result in results:
+                    st.markdown(result, unsafe_allow_html=True)
+elif st.session_state.get('search_started', False):
     st.error('該当するキーワードが見つかりませんでした。')
 
 # 検索が終了したときにメッセージを表示
