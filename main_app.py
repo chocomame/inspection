@@ -11,6 +11,13 @@ import time
 import re
 from urllib.parse import urlparse, urldefrag, unquote, urljoin, quote
 
+# セッション状態の初期化
+if 'results' not in st.session_state:
+    st.session_state['results'] = {}
+if 'search_finished' not in st.session_state:
+    st.session_state['search_finished'] = False
+if 'search_started' not in st.session_state:
+    st.session_state['search_started'] = False
 
 visited_pages = set()
 max_depth = 4  # 最大探索深度を設定
@@ -163,8 +170,8 @@ def start_search(url, keywords, domain):
     return results
 
 # Streamlitのタイトル設定
-st.title('WEBサイト内の表記ゆれをチェック')
-st.markdown('選択されたキーワードごとにカテゴライズされるので、多いキーワードがどれかを判断しやすくなりました！  \n全角英数字を選択した場合のみ、ページごとのカテゴライズになり作業しやすくしています。  \nฅ^• ·̫ •^ฅ')
+st.title('WEBサイト内の表記ゆれチェック')
+st.markdown('▼ver1.0.5/2024.08.29  \n・「全てのキーワードをチェック」を追加して全部チェックできるようになりました！  \n・「全て解除」を1回ポチるだけで全解除されるようになりました！  \n\n▼ver1.0.4/2024.08.19  \n・進捗確認ができるようになりました！ ')
 
 # 画像
 image = Image.open('ima01.jpg')
@@ -192,6 +199,24 @@ if 'checked_keywords_order' not in st.session_state:
 # 3列のレイアウトを作成
 col1, col2, col3 = st.columns(3)
 
+# 全て解除フラグの初期化
+if 'reset_all' not in st.session_state:
+    st.session_state.reset_all = False
+
+# 全てチェックフラグの初期化
+if 'check_all' not in st.session_state:
+    st.session_state.check_all = False
+
+# 全てのキーワードをチェックするオプションを追加
+all_checked = st.checkbox('全てのキーワードをチェック', key='all_checked', 
+                          value=st.session_state.check_all)
+
+# 全てチェックの状態が変更された場合、再実行
+if all_checked != st.session_state.check_all:
+    st.session_state.check_all = all_checked
+    st.session_state.reset_all = False
+    st.rerun()
+
 # 各キーワードに対してチェックボックスを作成
 for i, option in enumerate(keyword_options):
     # チェックボックスを配置するカラムを決定
@@ -201,39 +226,59 @@ for i, option in enumerate(keyword_options):
         col = col2
     else:
         col = col3
+    
+    # チェックボックスの初期状態を設定
+    if st.session_state.reset_all:
+        initial_state = False
+    else:
+        initial_state = all_checked or st.session_state.get(f"{option}-{i}", False)
+    
     # チェックボックスを作成し、状態をSession Stateから取得
-    checkbox_state = col.checkbox(option, key=f"{option}-{i}", value=st.session_state['checkbox_states'][i])
-    # チェックボックスの状態をSession Stateに保存
-    st.session_state['checkbox_states'][i] = checkbox_state
+    checkbox_state = col.checkbox(option, key=f"{option}-{i}", value=initial_state)
+    
     if checkbox_state:
-        keywords.append(option)
+        if option not in keywords:
+            keywords.append(option)
         if option not in st.session_state['checked_keywords_order']:
             st.session_state['checked_keywords_order'].append(option)
     else:
+        if option in keywords:
+            keywords.remove(option)
         if option in st.session_state['checked_keywords_order']:
             st.session_state['checked_keywords_order'].remove(option)
 
 # 全てのチェックボックスを解除するボタンを作成
 if st.button('全て解除'):
-    # 全てのチェックボックスの状態をFalseに設定
-    st.session_state['checkbox_states'] = [False] * len(keyword_options)
-    # keywordsリストを空にする
+    st.session_state.reset_all = True
+    st.session_state.check_all = False
+    st.rerun()
+
+# リセットフラグをクリア
+if st.session_state.reset_all:
+    st.session_state.reset_all = False
     keywords.clear()
-    # チェックされたキーワードの順序リストを空にする
     st.session_state['checked_keywords_order'] = []
-st.markdown('<span style="color:red; font-size:14px">※全てのチェックを解除するには、「全て解除」ボタンを2回押してね！</span>', unsafe_allow_html=True)
 
-additional_keywords = st.text_area('他に検索したいキーワードがあれば、各キーワードを新しい行に入力してください', '')
-if additional_keywords:
-    keywords.extend(additional_keywords.splitlines())
+st.markdown('<span style="color:red; font-size:14px">※「全て解除」ボタンを押すと、全てのチェックが解除されます。</span>', unsafe_allow_html=True)
 
-# 検索結果と検索終了フラグを保存するためのSession Stateを初期化
-if 'results' not in st.session_state:
-    st.session_state['results'] = {}  # 辞書型に変更
-if 'search_finished' not in st.session_state:
-    st.session_state['search_finished'] = False
-if 'search_started' not in st.session_state:  # 新しいセッションステート変数を追加
-    st.session_state['search_started'] = False
+# 追加キーワードの状態を保存するためのSession State
+if 'additional_keywords' not in st.session_state:
+    st.session_state.additional_keywords = ''
+
+# 追加キーワード入力欄
+additional_keywords = st.text_area('他に検索したいキーワードがあれば、各キーワードを新しい行に入力してください', 
+                                   value=st.session_state.additional_keywords)
+
+# 追加キーワードの状態を更新
+if additional_keywords != st.session_state.additional_keywords:
+    st.session_state.additional_keywords = additional_keywords
+
+# キーワードリストの更新
+keywords = [option for i, option in enumerate(keyword_options) if st.session_state.get(f"{option}-{i}", False)]
+additional_keywords_list = []
+if st.session_state.additional_keywords:
+    additional_keywords_list = [kw.strip() for kw in st.session_state.additional_keywords.splitlines() if kw.strip()]
+    keywords.extend(additional_keywords_list)
 
 # 検索時に全角英数字を一文字ずつ検索する
 search_keywords_list = []
@@ -246,21 +291,48 @@ for keyword in keywords:
 if st.button('検索開始'):
     with st.spinner('検索中...キーワードごとにカテゴライズしてるから、ちょっと待っててね！ฅ^•ω•^ฅ'):
         start_time = time.time()
-        results = search_keywords(url, keywords, domain)
+        results = search_keywords(url, search_keywords_list, domain)
         end_time = time.time()
         if results:  # 結果が空でない場合のみ結果を保存
+            # 全角英数字の結果を一つにまとめる
+            if full_width_alphanumeric in keywords:
+                full_width_results = {}
+                for char in full_width_alphanumeric:
+                    if char in results:
+                        if isinstance(results[char], list):
+                            for result in results[char]:
+                                url = result.split(' : ')[1].split(' (')[0]
+                                if url not in full_width_results:
+                                    full_width_results[url] = []
+                                full_width_results[url].append(result)
+                        elif isinstance(results[char], dict):
+                            for url, url_results in results[char].items():
+                                if url not in full_width_results:
+                                    full_width_results[url] = []
+                                full_width_results[url].extend(url_results)
+                        del results[char]
+                if full_width_results:
+                    results[full_width_alphanumeric] = full_width_results
+            
+            # 追加キーワードの結果を処理
+            for keyword in additional_keywords_list:
+                if keyword in results:
+                    if keyword not in st.session_state['checked_keywords_order']:
+                        st.session_state['checked_keywords_order'].append(keyword)
+
             st.session_state['results'] = results
             st.session_state['search_finished'] = True
             st.session_state['search_started'] = True
             st.success(f'検索が終了しました。処理時間: {end_time - start_time:.2f}秒')
         else:
             st.session_state['search_started'] = True
+            st.session_state['search_finished'] = False
             st.error('該当するキーワードが見つかりませんでした。')
 
 # 検索結果の表示
 if 'results' in st.session_state and st.session_state['results']:
     # チェックされたキーワードの順序に基づいて結果を表示
-    for keyword in st.session_state['checked_keywords_order']:
+    for keyword in st.session_state.get('checked_keywords_order', []):
         if keyword in st.session_state['results'] and st.session_state['results'][keyword]:
             results = st.session_state['results'][keyword]
             if keyword == full_width_alphanumeric:
@@ -275,6 +347,16 @@ if 'results' in st.session_state and st.session_state['results']:
                 st.markdown(f"<h2 style='font-weight: bold; font-size: 20px;'>キーワード '{keyword}' の検索結果 ({num_results}件)：</h2>", unsafe_allow_html=True)
                 for result in results:
                     st.markdown(result, unsafe_allow_html=True)
+    
+    # 追加キーワードの結果を表示
+    for keyword in additional_keywords_list:
+        if keyword in st.session_state['results'] and st.session_state['results'][keyword]:
+            results = st.session_state['results'][keyword]
+            num_results = len(results)
+            st.markdown(f"<h2 style='font-weight: bold; font-size: 20px;'>キーワード '{keyword}' の検索結果 ({num_results}件)：</h2>", unsafe_allow_html=True)
+            for result in results:
+                st.markdown(result, unsafe_allow_html=True)
+
 elif st.session_state.get('search_started', False):
     st.error('該当するキーワードが見つかりませんでした。')
 
