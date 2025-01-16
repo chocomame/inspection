@@ -1,5 +1,5 @@
-Pillow
 streamlit
 requests
 beautifulsoup4
 chardet
+Pillow

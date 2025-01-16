@@ -175,7 +175,7 @@ st.markdown('▼ver1.0.5/2024.08.29  \n・「全てのキーワードをチェ�
 
 # 画像
 image = Image.open('ima01.jpg')
-st.image(image,use_column_width=True)
+st.image(image, use_container_width=True)
 
 # ユーザーが入力する欄
 url = st.text_input('検索するURLを入力してください', '')
