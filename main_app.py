@@ -26,16 +26,19 @@ def normalize_url(url):
     # URLをデコードしてから再エンコード
     decoded_url = unquote(url)
     url = quote(decoded_url, safe=':/?=&')
-    # フラグメント識別子（アンカーリンク）を削除
-    url = url.split('#')[0]
-    # クエリパラメータを削除
-    url = url.split('?')[0]
+    
+    # フラグメント識別子（#以降）を削除する前にURLを正規化
+    parsed_url = urlparse(url)
+    # ドメインとパスのみを保持
+    normalized_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
+    
     # 末尾のスラッシュを削除（ただし、/wp/は保持）
-    if not url.endswith('/wp/'):
-        url = re.sub(r'/+$', '', url)
+    if not normalized_url.endswith('/wp/'):
+        normalized_url = re.sub(r'/+$', '', normalized_url)
+    
     # 末尾の引用符を削除
-    url = url.rstrip('"')
-    return url
+    normalized_url = normalized_url.rstrip('"')
+    return normalized_url
 
 def is_valid_url(url):
     try:
@@ -54,10 +57,11 @@ def search_keywords(url, keywords, original_domain, depth=0):
     if depth > max_depth:
         return {}
 
-    url = normalize_url(url)
-    update_progress(f"処理中のURL: {url} (深さ: {depth})")
-
     try:
+        # URLの正規化を最初に行う
+        url = normalize_url(url)
+        update_progress(f"処理中のURL: {url} (深さ: {depth})")
+
         # URLの検証
         if not is_valid_url(url):
             return {}
@@ -74,7 +78,7 @@ def search_keywords(url, keywords, original_domain, depth=0):
 
         # 指定されたURLに対してリクエストを行う
         page = requests.get(url, timeout=10)
-        page.raise_for_status()  # HTTPエラーをチェック
+        page.raise_for_status()
 
         # HTMLコンテンツのパース
         soup = BeautifulSoup(page.content, 'html.parser')
@@ -128,41 +132,47 @@ def search_keywords(url, keywords, original_domain, depth=0):
         # 空の結果を削除
         results = {k: v for k, v in results.items() if v}
 
-        # ページ内の全リンクを検索する
-        links = soup.find_all('a')
+        # リンクの取得方法を改善
+        links = []
+        for link in soup.find_all('a', href=True):
+            href = link.get('href')
+            if href:
+                # 相対URLを絶対URLに変換
+                full_url = urljoin(url, href)
+                # フラグメント識別子を削除
+                full_url = urldefrag(full_url)[0]
+                # 正規化
+                full_url = normalize_url(full_url)
+                
+                # 同じドメイン内のURLのみを追加
+                if urlparse(full_url).netloc == original_domain:
+                    links.append(full_url)
 
-        # リンクを繰り返し、各リンクに対して再帰的に関数を呼び出す
-        for link in links:
-            link_url = link.get('href')
-            if link_url:
-                # URLが相対パスの場合、絶対URLに変換する
-                if not link_url.startswith('http'):
-                    link_url = urljoin(url, link_url)
-                link_url = normalize_url(link_url)
-                # 電話番号のリンクを除外
-                if link_url.startswith('tel:'):
-                    continue
-                # ドメインが一致し、有効なURLの場合のみ再帰的に関数を呼び出す
-                if urlparse(link_url).netloc == original_domain and is_valid_url(link_url):
-                    new_results = search_keywords(link_url, keywords, original_domain, depth + 1)
-                    if new_results:  # 空の辞書をチェック
-                        for keyword, new_result in new_results.items():
-                            if keyword in results:
-                                if keyword == full_width_alphanumeric:
-                                    results[keyword].update(new_result)
-                                else:
-                                    results[keyword].extend(new_result)
-                            else:
-                                results[keyword] = new_result
+        # 重複を除去
+        links = list(set(links))
 
-        return results  # 辞書を返す
+        # 各リンクに対して再帰的に処理
+        for link_url in links:
+            if link_url not in visited_pages:
+                new_results = search_keywords(link_url, keywords, original_domain, depth + 1)
+                # 結果の統合
+                for keyword, new_result in new_results.items():
+                    if keyword in results:
+                        if keyword == full_width_alphanumeric:
+                            results[keyword].update(new_result)
+                        else:
+                            results[keyword].extend(new_result)
+                    else:
+                        results[keyword] = new_result
 
-    except requests.RequestException:
-        pass
-    except Exception:
-        pass
+        return results
 
-    return results
+    except requests.RequestException as e:
+        st.warning(f"URLへのアクセスエラー: {url} - {str(e)}")
+        return {}
+    except Exception as e:
+        st.warning(f"予期せぬエラー: {url} - {str(e)}")
+        return {}
 
 def start_search(url, keywords, domain):
     results = search_keywords(url, keywords, domain)
@@ -171,7 +181,7 @@ def start_search(url, keywords, domain):
 
 # Streamlitのタイトル設定
 st.title('WEBサイト内の表記ゆれチェック')
-st.markdown('▼ver1.0.6/2025.01.17  \n・Streamlitの仕様に合わせて修正を行ないました  \n\n▼ver1.0.5/2024.08.29  \n・「全てのキーワードをチェック」を追加して全部チェックできるようになりました！  \n・「全て解除」を1回ポチるだけで全解除されるようになりました！')
+st.markdown('▼ver1.0.7/2025.02.07  \n・バグを修正しました  \n\n▼ver1.0.6/2025.01.17  \n・Streamlitの仕様に合わせて修正を行ないました  \n\n▼ver1.0.5/2024.08.29  \n・「全てのキーワードをチェック」を追加して全部チェックできるようになりました！  \n・「全て解除」を1回ポチるだけで全解除されるようになりました！')
 
 # 画像
 image = Image.open('ima01.jpg')
