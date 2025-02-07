@@ -27,6 +27,10 @@ def normalize_url(url):
     decoded_url = unquote(url)
     url = quote(decoded_url, safe=':/?=&')
     
+    # PDFファイルの場合は処理しない
+    if url.lower().endswith('.pdf'):
+        return None
+    
     # フラグメント識別子（#以降）を削除する前にURLを正規化
     parsed_url = urlparse(url)
     # ドメインとパスのみを保持
@@ -43,6 +47,9 @@ def normalize_url(url):
 def is_valid_url(url):
     try:
         result = urlparse(url)
+        # PDFファイルを除外
+        if result.path.lower().endswith('.pdf'):
+            return False
         return all([result.scheme, result.netloc])
     except:
         return False
