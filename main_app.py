@@ -188,7 +188,7 @@ def start_search(url, keywords, domain):
 
 # Streamlitのタイトル設定
 st.title('WEBサイト内の表記ゆれチェック')
-st.markdown('▼ver1.0.7/2025.02.07  \n・バグを修正しました  \n\n▼ver1.0.6/2025.01.17  \n・Streamlitの仕様に合わせて修正を行ないました  \n\n▼ver1.0.5/2024.08.29  \n・「全てのキーワードをチェック」を追加して全部チェックできるようになりました！  \n・「全て解除」を1回ポチるだけで全解除されるようになりました！')
+st.markdown('▼ver1.0.8/2025.10.09  \n・Streamlitの仕様に合わせて修正を行ないました  \n\n▼ver1.0.7/2025.02.07  \n・バグを修正しました  \n\n▼ver1.0.6/2025.01.17  \n・Streamlitの仕様に合わせて修正を行ないました')
 
 # 画像
 image = Image.open('ima01.jpg')
@@ -213,26 +213,53 @@ if 'checkbox_states' not in st.session_state:
 if 'checked_keywords_order' not in st.session_state:
     st.session_state['checked_keywords_order'] = []
 
+# 全て解除フラグの初期化
+if 'reset_all_clicked' not in st.session_state:
+    st.session_state.reset_all_clicked = False
+
+# 全てチェックフラグの初期化
+if 'check_all_clicked' not in st.session_state:
+    st.session_state.check_all_clicked = False
+
+# 全て解除がクリックされた場合の処理
+if st.session_state.reset_all_clicked:
+    # 各チェックボックスの状態を初期化（キー自体を削除せず、Falseに設定）
+    for i, option in enumerate(keyword_options):
+        st.session_state[f"checkbox_{option}_{i}"] = False
+    st.session_state['all_checked_checkbox'] = False
+    st.session_state['prev_all_checked'] = False
+    st.session_state['checked_keywords_order'] = []
+    st.session_state.reset_all_clicked = False
+
+# 全てチェックがクリックされた場合の処理
+if st.session_state.check_all_clicked:
+    # 各チェックボックスの状態をTrueに設定
+    for i, option in enumerate(keyword_options):
+        st.session_state[f"checkbox_{option}_{i}"] = True
+    st.session_state['all_checked_checkbox'] = True
+    st.session_state.check_all_clicked = False
+
 # 3列のレイアウトを作成
 col1, col2, col3 = st.columns(3)
 
-# 全て解除フラグの初期化
-if 'reset_all' not in st.session_state:
-    st.session_state.reset_all = False
-
-# 全てチェックフラグの初期化
-if 'check_all' not in st.session_state:
-    st.session_state.check_all = False
-
 # 全てのキーワードをチェックするオプションを追加
-all_checked = st.checkbox('全てのキーワードをチェック', key='all_checked', 
-                          value=st.session_state.check_all)
+if 'all_checked_checkbox' not in st.session_state:
+    st.session_state['all_checked_checkbox'] = False
 
-# 全てチェックの状態が変更された場合、再実行
-if all_checked != st.session_state.check_all:
-    st.session_state.check_all = all_checked
-    st.session_state.reset_all = False
+all_checked = st.checkbox('全てのキーワードをチェック', key='all_checked_checkbox')
+
+# チェックボックスの状態が変更された場合（ONになった時のみ処理）
+if 'prev_all_checked' not in st.session_state:
+    st.session_state['prev_all_checked'] = False
+
+if all_checked and not st.session_state['prev_all_checked']:
+    # 全てチェックがONになった
+    st.session_state.check_all_clicked = True
+    st.session_state['prev_all_checked'] = True
     st.rerun()
+elif not all_checked and st.session_state['prev_all_checked']:
+    # 全てチェックがOFFになった（個別チェックはそのまま維持）
+    st.session_state['prev_all_checked'] = False
 
 # 各キーワードに対してチェックボックスを作成
 for i, option in enumerate(keyword_options):
@@ -244,14 +271,13 @@ for i, option in enumerate(keyword_options):
     else:
         col = col3
     
-    # チェックボックスの初期状態を設定
-    if st.session_state.reset_all:
-        initial_state = False
-    else:
-        initial_state = all_checked or st.session_state.get(f"{option}-{i}", False)
+    # チェックボックスを作成
+    # セッション状態に値がない場合は False で初期化（ウィジェット作成前に実行）
+    checkbox_key = f"checkbox_{option}_{i}"
+    if checkbox_key not in st.session_state:
+        st.session_state[checkbox_key] = False
     
-    # チェックボックスを作成し、状態をSession Stateから取得
-    checkbox_state = col.checkbox(option, key=f"{option}-{i}", value=initial_state)
+    checkbox_state = col.checkbox(option, key=checkbox_key)
     
     if checkbox_state:
         if option not in keywords:
@@ -266,15 +292,9 @@ for i, option in enumerate(keyword_options):
 
 # 全てのチェックボックスを解除するボタンを作成
 if st.button('全て解除'):
-    st.session_state.reset_all = True
-    st.session_state.check_all = False
+    # フラグを立てて再実行（ウィジェット作成前の処理で実際のクリアを行う）
+    st.session_state.reset_all_clicked = True
     st.rerun()
-
-# リセットフラグをクリア
-if st.session_state.reset_all:
-    st.session_state.reset_all = False
-    keywords.clear()
-    st.session_state['checked_keywords_order'] = []
 
 st.markdown('<span style="color:red; font-size:14px">※「全て解除」ボタンを押すと、全てのチェックが解除されます。</span>', unsafe_allow_html=True)
 
@@ -291,7 +311,7 @@ if additional_keywords != st.session_state.additional_keywords:
     st.session_state.additional_keywords = additional_keywords
 
 # キーワードリストの更新
-keywords = [option for i, option in enumerate(keyword_options) if st.session_state.get(f"{option}-{i}", False)]
+keywords = [option for i, option in enumerate(keyword_options) if st.session_state.get(f"checkbox_{option}_{i}", False)]
 additional_keywords_list = []
 if st.session_state.additional_keywords:
     additional_keywords_list = [kw.strip() for kw in st.session_state.additional_keywords.splitlines() if kw.strip()]
