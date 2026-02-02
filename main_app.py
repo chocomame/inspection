@@ -188,7 +188,7 @@ def start_search(url, keywords, domain):
 
 # Streamlitのタイトル設定
 st.title('WEBサイト内の表記ゆれチェック')
-st.markdown('▼ver1.0.8/2025.10.09  \n・Streamlitの仕様に合わせて修正を行ないました  \n\n▼ver1.0.7/2025.02.07  \n・バグを修正しました  \n\n▼ver1.0.6/2025.01.17  \n・Streamlitの仕様に合わせて修正を行ないました')
+st.markdown('▼ver1.0.9/2026.02.02  \n・Streamlitの仕様に合わせて修正を行ないました  \n\n▼ver1.0.8/2025.10.09  \n・Streamlitの仕様に合わせて修正を行ないました  \n\n▼ver1.0.7/2025.02.07  \n・バグを修正しました')
 
 # 画像
 image = Image.open('ima01.jpg')
